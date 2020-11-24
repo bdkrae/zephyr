@@ -16,10 +16,6 @@
 		led0 = &board_led;
 	};
 
-	chosen {
-		zephyr,console = &lpuart6;
-	};
-
 	leds {
 		compatible = "gpio-leds";
 		board_led: led-1 {
@@ -41,11 +37,6 @@
 		status = "okay";
 		jedec-id = [ef 40 15];
 	};
-};
-
-&lpuart6 {
-	status = "okay";
-	current-speed = <115200>;
 };
 
 &usb1 {
