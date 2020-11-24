@@ -30,4 +30,11 @@
 
 &usdhc1 {
 	status = "okay";
+	/* These gpios are not functional but must be defined here
+	 * for the usdhc driver to work. Since they are not used on
+	 * teensy board this should not have any negative effects
+	 * on other peripherals.
+	 */
+	pwr-gpios = < &gpio1 5 GPIO_ACTIVE_HIGH >;
+	cd-gpios = < &gpio3 21 GPIO_ACTIVE_HIGH>;
 };
