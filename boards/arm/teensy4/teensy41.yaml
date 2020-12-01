@@ -12,7 +12,7 @@ toolchain:
   - zephyr
   - gnuarmemb
   - xtools
-ram: 32768
+ram: 128
 flash: 8192
 supported:
   - counter
