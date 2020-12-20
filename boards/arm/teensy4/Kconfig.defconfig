@@ -27,6 +27,10 @@ if NETWORKING
 config NET_L2_ETHERNET
 	default y
 
+config PHY_DP83825
+	bool
+	default y
+
 endif # NETWORKING
 
 endif # BOARD_TEENSY40 || BOARD_TEENSY41
