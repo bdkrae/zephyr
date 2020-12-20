@@ -55,7 +55,7 @@ static void teensy4_usdhc_pinmux(uint16_t nusdhc, bool init, uint32_t speed,
 
 	if (init) {
 		IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_35_GPIO3_IO21, 0U);
-		IOMUXC_SetPinMux(IOMUXC_GPIO_B1_14_USDHC1_VSELECT, 0U);
+		IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_41_USDHC1_VSELECT, 0U);
 		IOMUXC_SetPinMux(IOMUXC_GPIO_SD_B0_00_USDHC1_CMD, 0U);
 		IOMUXC_SetPinMux(IOMUXC_GPIO_SD_B0_01_USDHC1_CLK, 0U);
 		IOMUXC_SetPinMux(IOMUXC_GPIO_SD_B0_02_USDHC1_DATA0, 0U);
@@ -67,7 +67,7 @@ static void teensy4_usdhc_pinmux(uint16_t nusdhc, bool init, uint32_t speed,
 		IOMUXC_SetPinConfig(IOMUXC_GPIO_EMC_35_GPIO3_IO21, 0x017089u);
 
 		/* SD0_VSELECT */
-		IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_14_USDHC1_VSELECT,
+		IOMUXC_SetPinConfig(IOMUXC_GPIO_EMC_41_USDHC1_VSELECT,
 				    0x0170A1u);
 	}
 
@@ -289,18 +289,11 @@ static int teensy4_init(const struct device *dev)
 	IOMUXC_SetPinMux(IOMUXC_GPIO_B1_14_ENET_MDC, 0);
 	IOMUXC_SetPinMux(IOMUXC_GPIO_B1_15_ENET_MDIO, 0);
 
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B0_14_GPIO2_IO14, 0xB0A9u);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B0_15_GPIO2_IO15, 0xB0A9u);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_04_ENET_RX_DATA00, 0x30E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_05_ENET_RX_DATA01, 0xB0E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_06_ENET_RX_EN, 0x30E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_07_ENET_TX_DATA00, 0xB0E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_08_ENET_TX_DATA01, 0xB0E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_09_ENET_TX_EN, 0xB0E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_10_ENET_REF_CLK, 0x31);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_11_ENET_RX_ER, 0x30E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_14_ENET_MDC, 0xB0E9);
-	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_15_ENET_MDIO, 0xB829);
+	/* Mode Straps configuration DP83825 */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_04_ENET_RX_DATA00, 0x30E9); /* PhyAdd[0] = 0 */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_05_ENET_RX_DATA01, 0xF0E9); /* RMII Master/Slave = 1*/
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_06_ENET_RX_EN, 0x30E9); /* PhyAdd[1] = 0 */
+	IOMUXC_SetPinConfig(IOMUXC_GPIO_B1_11_ENET_RX_ER, 0x30E9); /* A-MDIX = 0 */
 
 	IOMUXC_EnableMode(IOMUXC_GPR, kIOMUXC_GPR_ENET1TxClkOutputDir, true);
 
@@ -352,7 +345,7 @@ static int teensy4_init(const struct device *dev)
 static int teensy4_phy_reset(const struct device *dev)
 {
 	/* RESET PHY chip. */
-	k_busy_wait(USEC_PER_MSEC * 10U);
+	k_busy_wait(USEC_PER_MSEC * 50U); /* Power up timing T4 of PHY = 50ms */
 	GPIO_WritePinOutput(GPIO2, 14, 1);
 
 	return 0;
