@@ -1,0 +1,4 @@
+// Needed for CODE and DATA relocation
+#define ITCM_ADDR (DT_N_S_soc_S_flexram_400b0000_S_itcm_0_REG_IDX_0_VAL_ADDRESS)
+#define DTCM_ADDR (DT_N_S_soc_S_flexram_400b0000_S_dtcm_20000000_REG_IDX_0_VAL_ADDRESS)
+#define OCRAM_ADDR (DT_N_S_soc_S_flexram_400b0000_S_ocram_20200000_REG_IDX_0_VAL_ADDRESS)
