@@ -1,5 +1,6 @@
 /*
  * Copyright 2020 NXP
+ * Copyright 2020 Bernhard Kraemer
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause

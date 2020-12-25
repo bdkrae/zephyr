@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2018, NXP
  * Copyright (c) 2020, Bernhard Kraemer
  *
  * SPDX-License-Identifier: Apache-2.0
