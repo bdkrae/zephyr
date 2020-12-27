@@ -20,7 +20,8 @@
 		zephyr,sram = &ocram;
 		zephyr,itcm = &itcm;
 		zephyr,dtcm = &dtcm;
-		zephyr,console = &lpuart6;
+		zephyr,console = &lpuart6; /* Teensy Pins 0(RX1) 1(TX1) */
+		zephyr,can-primary = &flexcan1; /* Teensy Pins 23(CRX1) 22(CTX1) */
 	};
 
 	leds {
@@ -53,6 +54,11 @@
 &lpuart6 {
 	status = "okay";
 	current-speed = < 115200 >;
+};
+
+&flexcan1 {
+	status = "okay";
+	bus-speed = < 125000 >;
 };
 
 &edma0 {
