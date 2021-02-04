@@ -28,6 +28,10 @@
 	};
 };
 
+&lpspi3 {
+	status = "okay";
+};
+
 &usdhc1 {
 	status = "okay";
 	/* These gpios are not functional but must be defined here
