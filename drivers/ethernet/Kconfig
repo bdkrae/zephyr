@@ -60,3 +60,5 @@ source "drivers/ethernet/Kconfig.dsa"
 source "drivers/ethernet/Kconfig.xlnx_gem"
 
 endmenu # "Ethernet Drivers"
+
+source "drivers/ethernet/phy/Kconfig"
