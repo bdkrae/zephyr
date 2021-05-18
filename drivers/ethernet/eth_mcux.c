@@ -41,7 +41,12 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #endif
 
 #include "fsl_enet.h"
+#if defined(CONFIG_PHY_DP83825)
+#include "phy_dp83825.h"
+#else
 #include "fsl_phy.h"
+#endif
+
 #if defined(CONFIG_NET_POWER_MANAGEMENT)
 #include "fsl_clock.h"
 #include <drivers/clock_control.h>
