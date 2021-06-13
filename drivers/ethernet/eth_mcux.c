@@ -31,6 +31,11 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <net/ethernet.h>
 #include <ethernet/eth_stats.h>
 
+#if defined(CONFIG_MDIO_NXP_MCUX)
+#include "../mdio/mdio_mcux.h"
+#include <net/phy.h>
+#endif
+
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 #include <drivers/ptp_clock.h>
 #include <net/gptp.h>
@@ -81,7 +86,7 @@ static const clock_ip_name_t enet_clocks[] = ENET_CLOCKS;
 
 static void eth_mcux_init(const struct device *dev);
 
-#if defined(CONFIG_ETH_MCUX_PHY_EXTRA_DEBUG)
+#if defined(CONFIG_ETH_MCUX_PHY_EXTRA_DEBUG) && !(CONFIG_MDIO_NXP_MCUX)
 static const char *phy_state_name(enum eth_mcux_phy_state state)
 {
 	static const char * const name[] = {
@@ -97,7 +102,7 @@ static const char *phy_state_name(enum eth_mcux_phy_state state)
 
 	return name[state];
 }
-#endif
+#endif /* CONFIG_ETH_MCUX_PHY_EXTRA_DEBUG && !CONFIG_MDIO_NXP_MCUX */
 
 static const char *eth_name(ENET_Type *base)
 {
@@ -132,6 +137,10 @@ struct eth_context {
 	float clk_ratio;
 #endif
 	struct k_sem tx_buf_sem;
+#if defined(CONFIG_MDIO_NXP_MCUX)
+	const struct device *mdio;
+	const struct device *phy;
+#endif
 	enum eth_mcux_phy_state phy_state;
 	bool enabled;
 	bool link_up;
@@ -253,6 +262,7 @@ static void eth_mcux_get_phy_params(phy_duplex_t *p_phy_duplex,
 }
 #else
 
+#if !(CONFIG_MDIO_NXP_MCUX)
 static void eth_mcux_decode_duplex_and_speed(uint32_t status,
 					     phy_duplex_t *p_phy_duplex,
 					     phy_speed_t *p_phy_speed)
@@ -276,6 +286,7 @@ static void eth_mcux_decode_duplex_and_speed(uint32_t status,
 		break;
 	}
 }
+#endif /* CONFIG_MDIO_NXP_MCUX */
 #endif /* ETH_MCUX_FIXED_LINK */
 
 static inline struct net_if *get_iface(struct eth_context *ctx, uint16_t vlan_tag)
@@ -296,6 +307,34 @@ static inline struct net_if *get_iface(struct eth_context *ctx, uint16_t vlan_ta
 #endif
 }
 
+#if defined(CONFIG_MDIO_NXP_MCUX)
+static void phy_link_state_changed(const struct device *pdev,
+					struct phy_link_state *state,
+					void *user_data)
+{
+	const struct device *dev = (struct device *) user_data;
+	struct eth_context *context = dev->data;
+
+	context->link_up = state->is_up;
+
+	/* Network interface might be NULL at this point */
+	if (context->iface == NULL)
+		return;
+
+	if (context->link_up) {
+		context->phy_duplex = PHY_LINK_IS_FULL_DUPLEX(state->speed)
+			? kPHY_FullDuplex : kPHY_HalfDuplex;
+		context->phy_speed = PHY_LINK_IS_SPEED_100M(state->speed)
+			? kPHY_Speed100M : kPHY_Speed10M;
+
+		net_eth_carrier_on(context->iface);
+		LOG_INF("%s enabled", eth_name(context->base));
+	} else {
+		net_eth_carrier_off(context->iface);
+		LOG_INF("%s link down", eth_name(context->base));
+	}
+}
+#else
 static void eth_mcux_phy_enter_reset(struct eth_context *context)
 {
 	/* Reset the PHY. */
@@ -607,8 +646,9 @@ static void eth_mcux_phy_setup(struct eth_context *context)
 	}
 
 	ENET_EnableInterrupts(context->base, ENET_EIR_MII_MASK);
-#endif
+#endif /* CONFIG_SOC_SERIES_IMX_RT */
 }
+#endif /* CONFIG_MDIO_NXP_MCUX */
 
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 
@@ -916,7 +956,6 @@ static void eth_mcux_init(const struct device *dev)
 	uint8_t mdns_multicast[6] = { 0x01, 0x00, 0x5E, 0x00, 0x00, 0xFB };
 #endif
 
-	context->phy_state = eth_mcux_phy_state_initial;
 
 	sys_clock = CLOCK_GetFreq(kCLOCK_CoreSysClk);
 
@@ -967,12 +1006,23 @@ static void eth_mcux_init(const struct device *dev)
 	ENET_AddMulticastGroup(context->base, mdns_multicast);
 #endif
 
-#if !defined(CONFIG_ETH_MCUX_NO_PHY_SMI)
+#if defined(CONFIG_MDIO_NXP_MCUX)
+	if (device_is_ready(context->phy)) {
+		phy_link_callback_set(context->phy, &phy_link_state_changed, (void *)dev);
+		ENET_ActiveRead(context->base);
+	} else {
+		LOG_ERR("PHY device not ready");
+	}
+#else
+	context->phy_state = eth_mcux_phy_state_initial;
+
+#if !defined(CONFIG_ETH_MCUX_NO_PHY_SMI) && !defined(CONFIG_MDIO_NXP_MCUX)
 	ENET_SetSMI(context->base, sys_clock, false);
 #endif
 
 	/* handle PHY setup after SMI initialization */
 	eth_mcux_phy_setup(context);
+#endif /* CONFIG_MDIO_NXP_MCUX */
 
 #if defined(CONFIG_PTP_CLOCK_MCUX)
 	/* Enable reclaim of tx descriptors that will have the tx timestamp */
@@ -980,7 +1030,9 @@ static void eth_mcux_init(const struct device *dev)
 #endif
 	ENET_SetCallback(&context->enet_handle, eth_callback, context);
 
+#if !defined(CONFIG_MDIO_NXP_MCUX)
 	eth_mcux_phy_start(context);
+#endif
 }
 
 static int eth_init(const struct device *dev)
@@ -1001,9 +1053,12 @@ static int eth_init(const struct device *dev)
 
 	k_sem_init(&context->tx_buf_sem,
 		   0, CONFIG_ETH_MCUX_TX_BUFFERS);
+
+#if !defined(CONFIG_MDIO_NXP_MCUX)
 	k_work_init(&context->phy_work, eth_mcux_phy_work);
 	k_work_init_delayable(&context->delayed_phy_work,
 			      eth_mcux_delayed_phy_work);
+#endif
 
 	if (context->generate_mac) {
 		context->generate_mac(context->mac_addr);
@@ -1162,7 +1217,11 @@ static void eth_mcux_common_isr(const struct device *dev)
 	} else if (EIR & (kENET_TxBufferInterrupt | kENET_TxFrameInterrupt)) {
 		ENET_TransmitIRQHandler(context->base, &context->enet_handle);
 	} else if (EIR & ENET_EIR_MII_MASK) {
+#if defined(CONFIG_MDIO_NXP_MCUX)
+		mdio_mcux_transfer_complete(context->mdio);
+#else
 		k_work_submit(&context->phy_work);
+#endif
 		ENET_ClearInterruptStatus(context->base, kENET_MiiInterrupt);
 	} else if (EIR) {
 		ENET_ClearInterruptStatus(context->base, 0xFFFFFFFF);
@@ -1342,6 +1401,8 @@ static void eth_mcux_err_isr(const struct device *dev)
 	static struct eth_context eth##n##_context = {			\
 		.base = (ENET_Type *)DT_INST_REG_ADDR(n),		\
 		.config_func = eth##n##_config_func,			\
+		.mdio = DEVICE_DT_GET(DT_CHILD(DT_DRV_INST(n), mdio)),			\
+		.phy = DEVICE_DT_GET(DT_CHILD(DT_DRV_INST(n), phy)),			\
 		.phy_addr = 0U,						\
 		.phy_duplex = kPHY_FullDuplex,				\
 		.phy_speed = kPHY_Speed100M,				\

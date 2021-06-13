@@ -19,6 +19,7 @@ LOG_MODULE_REGISTER(phy_mii, CONFIG_PHY_LOG_LEVEL);
 
 struct phy_mii_dev_config {
 	uint8_t phy_addr;
+	bool late_mii_start;
 	bool no_reset;
 	bool fixed;
 	int fixed_speed;
@@ -224,15 +225,17 @@ static void monitor_work_handler(struct k_work *work)
 	const struct device *dev = data->dev;
 	int rc;
 
-	k_sem_take(&data->sem, K_FOREVER);
+	if (data->cb != NULL) {
+		k_sem_take(&data->sem, K_FOREVER);
 
-	rc = update_link_state(dev);
+		rc = update_link_state(dev);
 
-	k_sem_give(&data->sem);
+		k_sem_give(&data->sem);
 
-	/* If link state has changed and a callback is set, invoke callback */
-	if (rc == 0) {
-		invoke_link_cb(dev);
+		/* If link state has changed and a callback is set, invoke callback */
+		if (rc == 0) {
+			invoke_link_cb(dev);
+		}
 	}
 
 	/* Submit delayed work */
@@ -313,13 +316,45 @@ static int phy_mii_get_link_state(const struct device *dev,
 	return 0;
 }
 
+static int phy_mii_start(const struct device *dev)
+{
+	const struct phy_mii_dev_config *const cfg = DEV_CFG(dev);
+	uint32_t phy_id;
+
+	mdio_bus_enable(cfg->mdio);
+
+	if (cfg->no_reset == false) {
+		reset(dev);
+	}
+
+	if (get_id(dev, &phy_id) == 0) {
+		if (phy_id == 0xFFFFFF) {
+			LOG_ERR("No PHY found at address %d",
+				cfg->phy_addr);
+			return -EINVAL;
+		}
+
+		LOG_INF("PHY (%d) ID %X", cfg->phy_addr, phy_id);
+	}
+
+	/* Advertise all speeds */
+	phy_mii_cfg_link(dev, -1);
+
+	return 0;
+}
+
 static int phy_mii_link_cb_set(const struct device *dev, phy_callback_t cb,
 				void *user_data)
 {
+	const struct phy_mii_dev_config *const cfg = DEV_CFG(dev);
 	struct phy_mii_dev_data *const data = DEV_DATA(dev);
 
 	data->cb = cb;
 	data->cb_data = user_data;
+
+	if (cfg->late_mii_start) {
+		phy_mii_start(dev);
+	}
 
 	/**
 	 * Immediately invoke the callback to notify the caller of the
@@ -334,7 +369,6 @@ static int phy_mii_initialize(const struct device *dev)
 {
 	const struct phy_mii_dev_config *const cfg = DEV_CFG(dev);
 	struct phy_mii_dev_data *const data = DEV_DATA(dev);
-	uint32_t phy_id;
 
 	k_sem_init(&data->sem, 1, 1);
 
@@ -359,24 +393,9 @@ static int phy_mii_initialize(const struct device *dev)
 	} else {
 		data->state.is_up = false;
 
-		mdio_bus_enable(cfg->mdio);
-
-		if (cfg->no_reset == false) {
-			reset(dev);
+		if (!cfg->late_mii_start) {
+			phy_mii_start(dev);
 		}
-
-		if (get_id(dev, &phy_id) == 0) {
-			if (phy_id == 0xFFFFFF) {
-				LOG_ERR("No PHY found at address %d",
-					cfg->phy_addr);
-				return -EINVAL;
-			}
-
-			LOG_INF("PHY (%d) ID %X", cfg->phy_addr, phy_id);
-		}
-
-		/* Advertise all speeds */
-		phy_mii_cfg_link(dev, -1);
 
 		k_work_init_delayable(&data->monitor_work,
 					monitor_work_handler);
@@ -400,6 +419,8 @@ static const struct ethphy_driver_api phy_mii_driver_api = {
 #define PHY_MII_CONFIG(n)						\
 static const struct phy_mii_dev_config phy_mii_dev_config_##n = {	\
 	.phy_addr = DT_PROP(DT_DRV_INST(n), address),			\
+	.late_mii_start = DT_PROP(DT_DRV_INST(n), late_mii_start),			\
+	.no_reset = DT_PROP(DT_DRV_INST(n), no_reset),			\
 	.fixed = IS_FIXED_LINK(n),					\
 	.fixed_speed = DT_ENUM_IDX_OR(DT_DRV_INST(n), fixed_link, 0),	\
 	.mdio = UTIL_AND(UTIL_NOT(IS_FIXED_LINK(n)),			\
