@@ -21,6 +21,13 @@
 	};
 };
 
+&enet {
+	status = "okay";
+	ptp {
+		status = "okay";
+	};
+};
+
 &lpspi3 {
 	status = "okay";
 };
